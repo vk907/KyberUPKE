@@ -189,15 +189,6 @@ def find_tail_for_probability(D, p):
 
 import math
 
-# quick check eta=2 in CBD
-bitsec = 128
-n, k = 256, 4            # k changed from 3 to 4
-NK = n * k               # = 1024
-q = 44620801
-# For k=3, q_max=455681, k1_max=46202
-# For k=4, q_max=44620801, k1_max=332272506
-target = 2**(-128) / n   # Common standard for DFR per-poly in Kyber/MLWE
-
 def DFR(k1, q):
     # Single coefficient variance
     var1 = 2 * (k1 + 1) + 1
@@ -208,25 +199,40 @@ def DFR(k1, q):
     tail = math.erfc(z / math.sqrt(2))
     return n * tail   # n=256 (per-poly failure)
 
-# Binary search for maximum k1
-lo, hi = 0, 20000000000
-while lo < hi:
-    mid = (lo + hi + 1) // 2
-    if DFR(mid, q) < 2**(-128):
-        lo = mid
-    else:
-        hi = mid - 1
+def quick_check(N, K,Q):
+    
+# quick check eta=2 in CBD
+    bitsec = 128
 
-print("max k1 =", lo)
-print("log2(max k1) =", math.log(lo, 2))
-# Test example
-print("DFR(log2):", math.log(DFR(lo, q), 2))
+    NK = N * K               # = 1024
 
-# Size calculations (uncompressed public key and ciphertext, fixed A/rho)
-pk_size = n * k * q.bit_length() / 8 + 32
-ct_size = (n * k * q.bit_length() + n * q.bit_length()) / 8
-print("public key size (bytes):", pk_size)
-print("ciphertext size (bytes):", ct_size)
+    # For k=3, q_max=455681, k1_max=46202
+    # For k=4, q_max=44620801, k1_max=332272506
+    target = 2**(-128) / N   # Common standard for DFR per-poly in Kyber/MLWE
+
+
+
+    # Binary search for maximum k1
+    lo, hi = 0, 20000000000
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if DFR(mid, Q) < 2**(-128):
+            lo = mid
+        else:
+            hi = mid - 1
+
+    # Test example
+    print("DFR(log2):", math.log(DFR(lo, Q), 2))
+
+    # Size calculations (uncompressed public key and ciphertext, fixed A/rho)
+    pk_size = N * K * Q.bit_length() / 8 + 32
+    ct_size = (N * K * Q.bit_length() + N * Q.bit_length()) / 8
+    print(f"(n={N},k={K},q={Q},eta={2})")
+    print("public key size (bytes):", pk_size)
+    print("ciphertext size (bytes):", ct_size)
+    print("max k1 =", lo)
+    print("log2(max k1) =", math.log(lo, 2))
+    return lo
 
 
 import math
@@ -255,6 +261,10 @@ def multiply_distribution(D, factor):
 # Build distributions (keep your original naming)
 CBD3 = build_centered_binomial(2)  # for s and r
 CBD2 = build_centered_binomial(2)  # for e and e'
+n, k = 256, 4            # k changed from 3 to 4
+q = 44620801
+quick_check(256,3,455681)
+lo=quick_check(n,k,q)
 
 k1=lo 
 

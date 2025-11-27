@@ -189,16 +189,40 @@ def find_tail_for_probability(D, p):
 
 import math
 
-def DFR(k1, q):
+def DFR(k1, Q,N,NK):
     # Single coefficient variance
-    var1 = 2 * (k1 + 1) + 1
+    var1 = 2 * (k1 + 1)
     # Total variance - changed to 1024
-    sigma = math.sqrt(NK * var1)
-    z = (q / 4) / sigma
+    sigma = math.sqrt(NK * var1+1)
+    z = (Q / 4) / sigma
     # Normal tail probability (two-tailed)
     tail = math.erfc(z / math.sqrt(2))
-    return n * tail   # n=256 (per-poly failure)
-
+    return N * tail   # n=256 (per-poly failure)
+def DFR_adjusted(k1, Q, N, K, eta=2):
+    """
+    Adjusted DFR calculation for given parameters
+    
+    Args:
+        k1: number of public key sums
+        q: modulus
+        N: ring dimension (e.g., 256)
+        K: vector dimension (e.g., 3, 4)
+        eta: noise parameter (default=2 for CBD)
+    """
+    # Single coefficient variance based on eta
+    # For centered binomial distribution ψ_η, variance ≈ η/2
+    # Since there are two such terms, so 2*η/2*(k1+1)+1
+    # k=3,q=455681, k1_max=43573
+    # k=4,q=44620801, k1_max=313366844
+    var1 = 2 * (k1 + 1)
+    # Total variance - changed to 1024
+    sigma = math.sqrt(N*K * var1+1)
+    
+    # Normal approximation
+    z = (Q / 4) / sigma
+    tail = math.erfc(z / math.sqrt(2))
+    
+    return N * tail  # Per-polynomial failure rate
 def quick_check(N, K,Q):
     
 # quick check eta=2 in CBD
@@ -216,13 +240,13 @@ def quick_check(N, K,Q):
     lo, hi = 0, 20000000000
     while lo < hi:
         mid = (lo + hi + 1) // 2
-        if DFR(mid, Q) < 2**(-128):
+        if DFR(mid, Q,N,NK) < 2**(-128):
             lo = mid
         else:
             hi = mid - 1
 
     # Test example
-    print("DFR(log2):", math.log(DFR(lo, Q), 2))
+    print("DFR(log2):", math.log(DFR(lo, Q,N,NK), 2))
 
     # Size calculations (uncompressed public key and ciphertext, fixed A/rho)
     pk_size = N * K * Q.bit_length() / 8 + 32
@@ -233,6 +257,50 @@ def quick_check(N, K,Q):
     print("max k1 =", lo)
     print("log2(max k1) =", math.log(lo, 2))
     return lo
+
+
+
+def quick_check_1(N, K, Q, eta=2, target_bitsec=128):
+    """
+    Comprehensive parameter check with adjustable eta
+    """
+    NK = N * K
+    target = 2**(-target_bitsec) / N
+    
+    print(f"Parameter Analysis:")
+    print(f"n={N}, k={K}, q={Q}, eta={eta}")
+    print(f"Target DFR: 2^{-target_bitsec}")
+    
+    # Binary search for maximum k1
+    lo, hi = 0, 10**10  # Increased upper bound
+    
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        current_dfr = DFR_adjusted(mid, Q, N, K, eta)
+        
+        if current_dfr < target:
+            lo = mid
+        else:
+            hi = mid - 1
+
+    
+    # Final verification
+    final_k1 = lo
+    final_dfr = DFR_adjusted(final_k1, Q, N, K, eta)
+    
+    # Size calculations
+    pk_size = N * K * Q.bit_length() / 8 + 32
+    ct_size = (N * K * Q.bit_length() + N * Q.bit_length()) / 8
+    
+    print(f"Results:")
+    print(f"Max k1 = {final_k1}")
+    print(f"log2(Max k1) = {math.log(final_k1, 2):.6f}")
+    print(f"Final DFR = {final_dfr:.2e}")
+    print(f"Final DFR (log2) = {math.log(final_dfr, 2):.6f}")
+    print(f"Public key size = {pk_size:.1f} bytes")
+    print(f"Ciphertext size = {ct_size:.1f} bytes")
+    
+    return final_k1
 
 
 import math
@@ -261,10 +329,10 @@ def multiply_distribution(D, factor):
 # Build distributions (keep your original naming)
 CBD3 = build_centered_binomial(2)  # for s and r
 CBD2 = build_centered_binomial(2)  # for e and e'
-n, k = 256, 4            # k changed from 3 to 4
-q = 44620801
-quick_check(256,3,455681)
-lo=quick_check(n,k,q)
+n, k = 256, 3            # k changed from 3 to 4
+q = 12289
+# quick_check_1(256,3,455681)
+lo=quick_check_1(n,k,q)
 
 k1=lo 
 
@@ -281,37 +349,52 @@ for _ in range(k1):
     E_pub = clean_dist(E_pub)
 
 # ---- Construct R----
+k1 = lo 
+
+# ---- Construct distributions ----
+S = build_centered_binomial(2)
+for _ in range(k1):
+    S = law_convolution(S, CBD3)
+    S = clean_dist(S)
+
+E_pub = build_centered_binomial(2)  
+for _ in range(k1):
+    E_pub = law_convolution(E_pub, CBD3)
+    E_pub = clean_dist(E_pub)
+
 R = CBD3
-
-# ---- Construct Eprime----
 Eprime = CBD2
-
-# ---- Additional separate e (the + e in the expression) ----
 E_extra = CBD2
 
-# T1 = e * r (corresponding to sum(ei) * r
+# T1 = sum(ei) * r (n×k terms)
 T1 = law_product(E_pub, R)
 T1 = clean_dist(T1)
 
-# T2 = e_extra (direct additional noise)
+# T2 = e_extra (n terms - one per coefficient)
 T2 = E_extra
 T2 = clean_dist(T2)
 
-# T3 = e' * s (corresponding to e_r * sum(si))
+# T3 = e' * sum(si) (n×k terms)  
 T3 = law_product(Eprime, S)
 T3 = clean_dist(T3)
 
-# noise_coef = T1 + T2 - T3
-neg_T3 = { -x: p for x, p in T3.items() }
+# noise_subtotal = T1 - T3 (n×k terms)
+neg_T3 = {-x: p for x, p in T3.items()}
+noise_subtotal = law_convolution(T1, neg_T3)
+noise_subtotal = clean_dist(noise_subtotal)
 
-noise_coef = law_convolution(T1, T2)        # T1 + T2
-noise_coef = clean_dist(noise_coef)
-noise_coef = law_convolution(noise_coef, neg_T3)  # - T3
-noise_coef = clean_dist(noise_coef)
+# Apply n×k convolution to (T1 - T3)
+tot_terms_t1_t3 = n * k
+noise_subtotal_expanded = iter_law_convolution(noise_subtotal, tot_terms_t1_t3)
+noise_subtotal_expanded = clean_dist(noise_subtotal_expanded)
 
-# Now accumulate single coefficient noise over n*k independent coefficients (each coefficient independent)
-tot_terms = n * k
-noise_total = iter_law_convolution(noise_coef, tot_terms)
+# Apply n convolution to T2
+tot_terms_t2 = n
+T2_expanded = iter_law_convolution(T2, tot_terms_t2)
+T2_expanded = clean_dist(T2_expanded)
+
+# Finally combine: (T1 - T3) expanded over n×k + T2 expanded over n
+noise_total = law_convolution(noise_subtotal_expanded, T2_expanded)
 noise_total = clean_dist(noise_total)
 
 # Target probability (consistent with your original script)

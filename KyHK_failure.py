@@ -189,114 +189,91 @@ def find_tail_for_probability(D, p):
 
 import math
 
-def DFR(k1, Q,N,NK):
-    # Single coefficient variance
-    var1 = 2 * (k1 + 1)
-    # Total variance - changed to 1024
-    sigma = math.sqrt(NK * var1+1)
-    z = (Q / 4) / sigma
-    # Normal tail probability (two-tailed)
-    tail = math.erfc(z / math.sqrt(2))
-    return N * tail   # n=256 (per-poly failure)
-def DFR_adjusted(k1, Q, N, K, eta=2):
+def DFR(k1, Q, P, N, K, eta=2):
     """
-    Adjusted DFR calculation for given parameters
+    Adjusted DFR calculation for 1-dimensional v (single polynomial)
     
     Args:
-        k1: number of public key sums
-        q: modulus
-        N: ring dimension (e.g., 256)
-        K: vector dimension (e.g., 3, 4)
-        eta: noise parameter (default=2 for CBD)
+        k1: number of additional public keys summed
+        Q: modulus
+        P: compression parameter  
+        N: ring dimension
+        eta: noise parameter for CBD
     """
-    # Single coefficient variance based on eta
-    # For centered binomial distribution ψ_η, variance ≈ η/2
-    # Since there are two such terms, so 2*η/2*(k1+1)+1
-    # k=3,q=455681, k1_max=43573
-    # k=4,q=44620801, k1_max=313366844
-    var1 = 2 * (k1 + 1)
-    # Total variance - changed to 1024
-    sigma = math.sqrt(N*K * var1+1)
     
-    # Normal approximation
-    z = (Q / 4) / sigma
-    tail = math.erfc(z / math.sqrt(2))
+    # 1. sum(pk_i) * r ≈ (k1+1) * (η²/4) * N
+    term1_per_coeff_variance = (k1 + 1) * (eta**2 / 4) * N*K
     
-    return N * tail  # Per-polynomial failure rate
-def quick_check(N, K,Q):
+    # 2. sum(s_i) * u  
+    term2_per_coeff_variance = (k1 + 1) * (eta**2 / 4) * N*K
     
-# quick check eta=2 in CBD
-    bitsec = 128
+    # 3. e' 
+    term3_per_coeff_variance = eta / 2
+    
+    # 4. delta_v 
+    compression_per_coeff_variance = (Q / (2.0 * P))**2 / 3.0
+    
+    # compress u
+    compress_u=0 # No compression
+#     compress_u=(Q / (2.0 * P*2**8))**2 / 3 * N*K*(k1 + 1)
 
-    NK = N * K               # = 1024
+    
+    # all
+    variance_per_coefficient = (term1_per_coeff_variance + 
+                              term2_per_coeff_variance + 
+                              term3_per_coeff_variance + 
+                              compression_per_coeff_variance+compress_u)
+    
+    total_variance = variance_per_coefficient
+    
+    sigma = math.sqrt(total_variance)
+    z = (Q / 4.0) / sigma
+    tail_prob = math.erfc(z / math.sqrt(2)) / 2
+    
+    return 2*N * tail_prob 
 
-    # For k=3, q_max=455681, k1_max=46202
-    # For k=4, q_max=44620801, k1_max=332272506
-    target = 2**(-128) / N   # Common standard for DFR per-poly in Kyber/MLWE
-
-
-
-    # Binary search for maximum k1
-    lo, hi = 0, 20000000000
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if DFR(mid, Q,N,NK) < 2**(-128):
-            lo = mid
-        else:
-            hi = mid - 1
-
-    # Test example
-    print("DFR(log2):", math.log(DFR(lo, Q,N,NK), 2))
-
-    # Size calculations (uncompressed public key and ciphertext, fixed A/rho)
-    pk_size = N * K * Q.bit_length() / 8 + 32
-    ct_size = (N * K * Q.bit_length() + N * Q.bit_length()) / 8
-    print(f"(n={N},k={K},q={Q},eta={2})")
-    print("public key size (bytes):", pk_size)
-    print("ciphertext size (bytes):", ct_size)
-    print("max k1 =", lo)
-    print("log2(max k1) =", math.log(lo, 2))
-    return lo
-
-
-
-def quick_check_1(N, K, Q, eta=2, target_bitsec=128):
+def quick_check_1(N, K, Q,P, eta=2, target_bitsec=128):
     """
     Comprehensive parameter check with adjustable eta
+    New condition: DFR × k1 ≤ 2^(-target_bitsec)
     """
     NK = N * K
-    target = 2**(-target_bitsec) / N
+    target = 2**(-target_bitsec)
     
     print(f"Parameter Analysis:")
-    print(f"n={N}, k={K}, q={Q}, eta={eta}")
-    print(f"Target DFR: 2^{-target_bitsec}")
+    print(f"n={N}, k={K}, q={Q}, eta={eta}, log2Q={math.log(Q,2):.2f}")
+    print(f"Target: DFR × k1 ≤ 2^{-target_bitsec}")
     
-    # Binary search for maximum k1
-    lo, hi = 0, 10**10  # Increased upper bound
-    
+    # Binary search for maximum k1 satisfying DFR × k1 ≤ 2^(-128)
+    lo, hi = 1, 10**30  # Start from 1 since k1 >= 1
     while lo < hi:
         mid = (lo + hi + 1) // 2
-        current_dfr = DFR_adjusted(mid, Q, N, K, eta)
+        current_dfr = DFR(mid, Q,P, N, K, eta)
+        current_product = current_dfr * mid
         
-        if current_dfr < target:
+        if current_product < target:
             lo = mid
         else:
             hi = mid - 1
-
     
     # Final verification
     final_k1 = lo
-    final_dfr = DFR_adjusted(final_k1, Q, N, K, eta)
+    final_dfr = DFR(final_k1, Q,P, N, K, eta)
+    final_product = final_dfr * final_k1
     
     # Size calculations
-    pk_size = N * K * Q.bit_length() / 8 + 32
-    ct_size = (N * K * Q.bit_length() + N * Q.bit_length()) / 8
-    
+    Q_bits = math.ceil(math.log2(Q))
+    P_bits = math.ceil(math.log2(P))
+
+    pk_size = N * K * Q_bits / 8 + 32
+    ct_size = (N * K * Q_bits + N * P_bits) / 8
     print(f"Results:")
     print(f"Max k1 = {final_k1}")
     print(f"log2(Max k1) = {math.log(final_k1, 2):.6f}")
     print(f"Final DFR = {final_dfr:.2e}")
     print(f"Final DFR (log2) = {math.log(final_dfr, 2):.6f}")
+    print(f"DFR × k1 = {final_product:.2e}")
+    print(f"DFR × k1 (log2) = {math.log(final_product, 2):.6f}")
     print(f"Public key size = {pk_size:.1f} bytes")
     print(f"Ciphertext size = {ct_size:.1f} bytes")
     
@@ -330,9 +307,13 @@ def multiply_distribution(D, factor):
 CBD3 = build_centered_binomial(2)  # for s and r
 CBD2 = build_centered_binomial(2)  # for e and e'
 n, k = 256, 3            # k changed from 3 to 4
-q = 12289
-# quick_check_1(256,3,455681)
-lo=quick_check_1(n,k,q)
+q = 130561
+p=2**5
+lo=quick_check_1(n,k,q,p)
+# lo=64
+# quick_check_1(256,5,4294966273)
+# quick_check_1(256,6,274877905921) 
+# quick_check_1(256,7,35184372088321) 
 
 k1=lo 
 
@@ -366,6 +347,8 @@ R = CBD3
 Eprime = CBD2
 E_extra = CBD2
 
+E_v=build_mod_switching_error_law(q,2**5)
+
 # T1 = sum(ei) * r (n×k terms)
 T1 = law_product(E_pub, R)
 T1 = clean_dist(T1)
@@ -388,13 +371,10 @@ tot_terms_t1_t3 = n * k
 noise_subtotal_expanded = iter_law_convolution(noise_subtotal, tot_terms_t1_t3)
 noise_subtotal_expanded = clean_dist(noise_subtotal_expanded)
 
-# Apply n convolution to T2
-tot_terms_t2 = n
-T2_expanded = iter_law_convolution(T2, tot_terms_t2)
-T2_expanded = clean_dist(T2_expanded)
-
 # Finally combine: (T1 - T3) expanded over n×k + T2 expanded over n
-noise_total = law_convolution(noise_subtotal_expanded, T2_expanded)
+noise_total = law_convolution(noise_subtotal_expanded, T2)
+noise_total = clean_dist(noise_total)
+noise_total = law_convolution(noise_total, E_v)
 noise_total = clean_dist(noise_total)
 
 # Target probability (consistent with your original script)
@@ -414,4 +394,34 @@ if not required_condition:
 else:
     print(f"Rest: {q/4 - f_final}")
 
-print("log2 of n * tail probability at (q/4):", math.log(n * tail_probability(noise_total, q/4), 2))
+print("log2 of k1*n * tail probability at (q/4):", math.log(lo*n * tail_probability(noise_total, q/4), 2))
+
+
+"""
+Parameter Analysis:
+n=256, k=3, q=130561, eta=2, log2Q=16.99
+Target: DFR × k1 ≤ 2^-128
+Results:
+Max k1 = 2590
+log2(Max k1) = 11.338736
+Final DFR = 1.13e-42
+Final DFR (log2) = -139.341873
+DFR × k1 = 2.93e-39
+DFR × k1 (log2) = -128.003137
+Public key size = 1664.0 bytes
+Ciphertext size = 1792.0 bytes
+iter 1
+iter 1
+iter 0
+iter 0
+iter 0
+iter 0
+iter 0
+iter 0
+iter 0
+iter 0
+Kyber-CPA tail-bound: 29066
+is q=130561 enough: True
+Rest: 3574.25
+log2 of k1*n * tail probability at (q/4): -151.2139471988895
+"""

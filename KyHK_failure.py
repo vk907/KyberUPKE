@@ -329,19 +329,7 @@ for _ in range(k1):
     E_pub = law_convolution(E_pub, CBD3)
     E_pub = clean_dist(E_pub)
 
-# ---- Construct R----
 k1 = lo 
-
-# ---- Construct distributions ----
-S = build_centered_binomial(2)
-for _ in range(k1):
-    S = law_convolution(S, CBD3)
-    S = clean_dist(S)
-
-E_pub = build_centered_binomial(2)  
-for _ in range(k1):
-    E_pub = law_convolution(E_pub, CBD3)
-    E_pub = clean_dist(E_pub)
 
 R = CBD3
 Eprime = CBD2

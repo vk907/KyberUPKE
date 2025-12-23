@@ -257,7 +257,10 @@ def quick_check_1(N, K, Q,P, eta=2, target_bitsec=128):
             hi = mid - 1
     
     # Final verification
-    final_k1 = lo
+    if 2*(lo+1)<Q/4:
+        final_k1 = lo
+    else:
+        final_k1 = Q/8-1
     final_dfr = DFR(final_k1, Q,P, N, K, eta)
     final_product = final_dfr * final_k1
     

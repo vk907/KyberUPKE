@@ -59,7 +59,7 @@ def quick_check_1(N, K, Q, P, eta=2, target_bitsec=128):
     print(f"Target: DFR × k1 ≤ 2^{-target_bitsec}")
     
     # Binary search for max k1 satisfying DFR × k1 ≤ 2^-128
-    lo, hi = 1, 10**30
+    lo, hi = 1, 10**100
     while lo < hi:
         mid = (lo + hi + 1) // 2
         current_dfr = DFR(mid, Q, P, N, K, eta)
@@ -71,7 +71,11 @@ def quick_check_1(N, K, Q, P, eta=2, target_bitsec=128):
             hi = mid - 1
     
     # Final verification
-    final_k1 = lo
+    if 2*(lo+1)<Q/4:
+        final_k1 = lo
+    else:
+        final_k1 = Q/8-1
+#     final_k1 = lo
     final_dfr = DFR(final_k1, Q, P, N, K, eta)
     final_product = final_dfr * final_k1
     
@@ -97,13 +101,19 @@ def test_condition():
     """Test various parameter configurations"""
     test_cases = [
         (256, 3, 130561, 2**5),
-        (256, 4, 2**21+2**19+2**18, 2**6),
-        (256, 5, 2**27, 2**5),
-        (256, 6, 2**30, 2**5),
-        (256, 7, 2**34, 2**5),
-        (256, 8, 2**38, 2**5),
-        (256, 9, 2**41, 2**5),
-        (256, 10, 2**44+2**43, 2**5),
+        (256, 4, 2**22-2**19, 2**5),
+#         (256, 5, 2**27, 2**5),
+#         (256, 6, 2**30, 2**5),
+#         (256, 7, 2**34, 2**5),
+#         (256, 8, 2**38, 2**5),
+#         (256, 9, 2**41, 2**5),
+#         (256, 10, 2**45, 2**5),
+#         (256, 11, 2**49, 2**5),
+#         (256, 12, 2**53, 2**5),
+#         (256, 13, 2**57, 2**5),
+#         (256, 14, 2**61, 2**5),
+#         (256, 15, 2**65, 2**5),
+        (256, 16, 2**67, 2**5),
     ]
     
     for N, K, Q, P in test_cases:
@@ -113,7 +123,6 @@ def test_condition():
 
 if __name__ == "__main__":
     test_condition()
-
 """
 ============================================================
 Parameter Analysis:
@@ -131,100 +140,30 @@ Ciphertext size = 1792.0 bytes
 For (n=256, k=3, q=130561), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 2590
 ============================================================
 Parameter Analysis:
-n=256, k=4, q=2883584, eta=2, log2Q=21.46
+n=256, k=4, q=3670016, eta=2, log2Q=21.81
 Target: DFR × k1 ≤ 2^-128
 Results:
-Max k1 = 1122386
-log2(Max k1) = 20.098137
-Final DFR = 2.62e-45
-Final DFR (log2) = -148.098206
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000069
+Max k1 = 458751.0
+log2(Max k1) = 18.807352
+Final DFR = 1.59e-89
+Final DFR (log2) = -294.980098
+DFR × k1 = 7.31e-84
+DFR × k1 (log2) = -276.172747
 Public key size = 2848.0 bytes
-Ciphertext size = 3008.0 bytes
-For (n=256, k=4, q=2883584), p=64, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 1122386
+Ciphertext size = 2976.0 bytes
+For (n=256, k=4, q=3670016), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 458751.0
 ============================================================
 Parameter Analysis:
-n=256, k=5, q=134217728, eta=2, log2Q=27.00
+n=256, k=16, q=147573952589676412928, eta=2, log2Q=67.00
 Target: DFR × k1 ≤ 2^-128
 Results:
-Max k1 = 1384135668
-log2(Max k1) = 30.366338
-Final DFR = 2.12e-48
-Final DFR (log2) = -158.366338
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000000
-Public key size = 4352.0 bytes
-Ciphertext size = 4480.0 bytes
-For (n=256, k=5, q=134217728), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 1384135668
-============================================================
-Parameter Analysis:
-n=256, k=6, q=1073741824, eta=2, log2Q=30.00
-Target: DFR × k1 ≤ 2^-128
-Results:
-Max k1 = 70310789919
-log2(Max k1) = 36.033027
-Final DFR = 4.18e-50
-Final DFR (log2) = -164.033027
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000000
-Public key size = 5792.0 bytes
-Ciphertext size = 5920.0 bytes
-For (n=256, k=6, q=1073741824), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 70310789919
-============================================================
-Parameter Analysis:
-n=256, k=7, q=17179869184, eta=2, log2Q=34.00
-Target: DFR × k1 ≤ 2^-128
-Results:
-Max k1 = 14462819057903
-log2(Max k1) = 43.717414
-Final DFR = 2.03e-52
-Final DFR (log2) = -171.717414
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000000
-Public key size = 7648.0 bytes
-Ciphertext size = 7776.0 bytes
-For (n=256, k=7, q=17179869184), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 14462819057903
-============================================================
-Parameter Analysis:
-n=256, k=8, q=274877906944, eta=2, log2Q=38.00
-Target: DFR × k1 ≤ 2^-128
-Results:
-Max k1 = 3040692512117796
-log2(Max k1) = 51.433321
-Final DFR = 9.66e-55
-Final DFR (log2) = -179.433321
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000000
-Public key size = 9760.0 bytes
-Ciphertext size = 9888.0 bytes
-For (n=256, k=8, q=274877906944), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 3040692512117796
-============================================================
-Parameter Analysis:
-n=256, k=9, q=2199023255552, eta=2, log2Q=41.00
-Target: DFR × k1 ≤ 2^-128
-Results:
-Max k1 = 165126874596713871
-log2(Max k1) = 57.196353
-Final DFR = 1.78e-56
-Final DFR (log2) = -185.196353
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000000
-Public key size = 11840.0 bytes
-Ciphertext size = 11968.0 bytes
-For (n=256, k=9, q=2199023255552), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 165126874596713871
-============================================================
-Parameter Analysis:
-n=256, k=10, q=26388279066624, eta=2, log2Q=44.58
-Target: DFR × k1 ≤ 2^-128
-Results:
-Max k1 = 20253915276037617662
-log2(Max k1) = 64.134835
-Final DFR = 1.45e-58
-Final DFR (log2) = -192.134835
-DFR × k1 = 2.94e-39
-DFR × k1 (log2) = -128.000000
-Public key size = 14432.0 bytes
-Ciphertext size = 14560.0 bytes
-For (n=256, k=10, q=26388279066624), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 20253915276037617662
+Max k1 = 1.8446744073709552e+19
+log2(Max k1) = 64.000000
+Final DFR = 1.25e-166
+Final DFR (log2) = -551.114997
+DFR × k1 = 2.31e-147
+DFR × k1 (log2) = -487.114997
+Public key size = 34336.0 bytes
+Ciphertext size = 34464.0 bytes
+For (n=256, k=16, q=147573952589676412928), p=32, the maximum k1 satisfying DFR×k1 ≤ 2^-128 is 1.8446744073709552e+19
 """
